@@ -1,107 +1,534 @@
-<Window x:Class="CozyDesktopOffice.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Cozy Desktop Office"
-        WindowStartupLocation="Manual"
-        WindowStyle="None"
-        AllowsTransparency="True"
-        Background="Transparent"
-        ShowInTaskbar="False"
-        ResizeMode="NoResize"
-        Topmost="True"
-        Width="1600" Height="900"
-        Loaded="MainWindow_Loaded"
-        DragEnter="MainWindow_DragEnter"
-        Drop="MainWindow_Drop"
-        AllowDrop="True">
+using System;
+using System.Collections.ObjectModel;
+using System.IO;
+using System.Linq;
+using System.Text.Json;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using Microsoft.Win32;
 
-    <Grid x:Name="RootGrid">
-        <Canvas x:Name="OfficeCanvas">
-            <Border x:Name="WallPanel" Width="1600" Height="900" Canvas.Left="0" Canvas.Top="0" Background="#FCEAEF" BorderBrush="#E4C4C8" BorderThickness="0"/>
-            <Border x:Name="FloorPanel" Width="1600" Height="340" Canvas.Left="0" Canvas.Top="560" Background="#D7B49A"/>
-            <Border x:Name="RoomBackWall" Width="1600" Height="190" Canvas.Left="0" Canvas.Top="0" Background="#F5D7DB" Opacity="0.6"/>
+namespace CozyDesktopOffice
+{
+    public partial class MainWindow : Window
+    {
+        private readonly FolderLayoutManager _folderLayoutManager = new();
+        private readonly DesktopIntegration _desktopIntegration = new();
+        private bool _desktopEnabled;
 
-            <Rectangle x:Name="SkyGlow" Width="560" Height="360" Canvas.Left="90" Canvas.Top="80" Fill="#F9D8B8" RadiusX="24" RadiusY="24"/>
-            <Border x:Name="WindowFrame" Width="620" Height="360" Canvas.Left="60" Canvas.Top="70" Background="#F7E8D9" BorderBrush="#C9968B" BorderThickness="10" CornerRadius="18"/>
-            <Rectangle x:Name="WindowGlass" Width="520" Height="260" Canvas.Left="112" Canvas.Top="120" Fill="#B8D9F0"/>
-            <Path x:Name="CurtainLeft" Fill="#E8B2BF" Stretch="Fill" Canvas.Left="60" Canvas.Top="70" Width="200" Height="360" Data="M0,0 L200,0 L160,360 L0,360 Z"/>
-            <Path x:Name="CurtainRight" Fill="#E8B2BF" Stretch="Fill" Canvas.Left="490" Canvas.Top="70" Width="200" Height="360" Data="M40,0 L200,0 L200,360 L0,360 Z"/>
+        public MainWindow()
+        {
+            InitializeComponent();
 
-            <Rectangle x:Name="DeskTop" Width="770" Height="60" Canvas.Left="412" Canvas.Top="520" Fill="#B67F5B" Stroke="#8C5C3C" StrokeThickness="5" RadiusX="8" RadiusY="8"/>
-            <Rectangle x:Name="DeskFront" Width="770" Height="160" Canvas.Left="412" Canvas.Top="580" Fill="#8F6048" Stroke="#6C4333" StrokeThickness="4" RadiusX="8" RadiusY="8"/>
-            <Rectangle x:Name="DeskLegLeft" Width="28" Height="200" Canvas.Left="455" Canvas.Top="678" Fill="#7A4D3C"/>
-            <Rectangle x:Name="DeskLegRight" Width="28" Height="200" Canvas.Left="1080" Canvas.Top="678" Fill="#7A4D3C"/>
-            <Rectangle x:Name="DeskLegMidLeft" Width="24" Height="160" Canvas.Left="620" Canvas.Top="700" Fill="#7A4D3C"/>
-            <Rectangle x:Name="DeskLegMidRight" Width="24" Height="160" Canvas.Left="932" Canvas.Top="700" Fill="#7A4D3C"/>
+            Loaded += MainWindow_Loaded;
+            SizeChanged += MainWindow_SizeChanged;
 
-            <Rectangle x:Name="MonitorBase" Width="250" Height="22" Canvas.Left="530" Canvas.Top="418" Fill="#4F4B5D" RadiusX="8" RadiusY="8"/>
-            <Rectangle x:Name="MonitorScreen" Width="230" Height="150" Canvas.Left="540" Canvas.Top="280" Fill="#A8E1F7" Stroke="#4D6F88" StrokeThickness="8" RadiusX="12" RadiusY="12"/>
-            <Rectangle x:Name="MonitorStand" Width="16" Height="90" Canvas.Left="650" Canvas.Top="430" Fill="#6F6779"/>
+            // Targeted drop handlers for the visible room surfaces.
+            BookshelfTarget.Drop += BookshelfDrop;
+            BoardTarget.Drop += BulletinBoardDrop;
+            DrawerUnit.Drop += DrawerDrop;
 
-            <Rectangle x:Name="Keyboard" Width="170" Height="26" Canvas.Left="830" Canvas.Top="456" Fill="#E3C9C6" RadiusX="8" RadiusY="8"/>
-            <Rectangle x:Name="Mouse" Width="34" Height="22" Canvas.Left="1010" Canvas.Top="460" Fill="#D0A29C" RadiusX="8" RadiusY="8"/>
-            <Ellipse x:Name="LampBase" Width="22" Height="22" Canvas.Left="1170" Canvas.Top="468" Fill="#E8C4AD"/>
-            <Rectangle x:Name="LampStem" Width="9" Height="130" Canvas.Left="1178" Canvas.Top="334" Fill="#B57C62"/>
-            <Path x:Name="LampShade" Fill="#F5C4B7" Stroke="#C68A7A" StrokeThickness="4" Data="M1160,330 L1210,330 L1230,390 L1140,390 Z"/>
+            // The whole scene also accepts drops as a fallback.
+            AddHandler(DragEnterEvent, new DragEventHandler(MainWindow_DragEnter), true);
+            AddHandler(DropEvent, new DragEventHandler(MainWindow_Drop), true);
 
-            <Rectangle x:Name="ChairSeat" Width="180" Height="34" Canvas.Left="265" Canvas.Top="435" Fill="#E7BFC9" Stroke="#C88D9A" StrokeThickness="4" RadiusX="18" RadiusY="18"/>
-            <Rectangle x:Name="ChairBack" Width="170" Height="150" Canvas.Left="270" Canvas.Top="270" Fill="#EFC8D3" Stroke="#C88D9A" StrokeThickness="4" RadiusX="18" RadiusY="18"/>
-            <Rectangle x:Name="ChairLegLeft" Width="18" Height="185" Canvas.Left="310" Canvas.Top="465" Fill="#B87C88"/>
-            <Rectangle x:Name="ChairLegRight" Width="18" Height="185" Canvas.Left="390" Canvas.Top="465" Fill="#B87C88"/>
-            <Rectangle x:Name="ChairSupport" Width="120" Height="18" Canvas.Left="300" Canvas.Top="545" Fill="#D8A4B0"/>
+            LightingModeCombo.SelectionChanged += LightingModeCombo_SelectionChanged;
+        }
 
-            <Border x:Name="BookshelfTarget" Width="400" Height="245" Canvas.Left="1060" Canvas.Top="145" Background="#E7D3C9" BorderBrush="#A88273" BorderThickness="6" CornerRadius="14" AllowDrop="True"/>
-            <Rectangle x:Name="BookshelfSide" Width="410" Height="245" Canvas.Left="1055" Canvas.Top="140" Fill="Transparent" Stroke="#8F7267" StrokeThickness="4" RadiusX="16" RadiusY="16"/>
-            <Rectangle x:Name="Shelf1" Width="360" Height="10" Canvas.Left="1085" Canvas.Top="250" Fill="#A68469"/>
-            <Rectangle x:Name="Shelf2" Width="360" Height="10" Canvas.Left="1085" Canvas.Top="330" Fill="#A68469"/>
-            <Rectangle x:Name="Shelf3" Width="360" Height="10" Canvas.Left="1085" Canvas.Top="410" Fill="#A68469"/>
+        private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            _folderLayoutManager.EnsureStructure();
+            LoadSettings();
+            RefreshLighting();
+            RenderBooks();
+            RenderDeskItems();
+            RenderBoardItems();
+        }
 
-            <Border x:Name="BoardTarget" Width="430" Height="260" Canvas.Left="120" Canvas.Top="510" Background="#D9B189" BorderBrush="#A17E5E" BorderThickness="6" CornerRadius="14" AllowDrop="True"/>
-            <Rectangle x:Name="BoardFrame" Width="430" Height="260" Canvas.Left="115" Canvas.Top="505" Fill="Transparent" Stroke="#8F6946" StrokeThickness="4" RadiusX="16" RadiusY="16"/>
+        private void MainWindow_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (_desktopEnabled)
+            {
+                Left = 0;
+                Top = 0;
+                Width = SystemParameters.VirtualScreenWidth;
+                Height = SystemParameters.VirtualScreenHeight;
+            }
+        }
 
-            <Border x:Name="DrawerUnit" Width="270" Height="130" Canvas.Left="710" Canvas.Top="130" Background="#EBC4CC" BorderBrush="#C28D98" BorderThickness="6" CornerRadius="12"/>
-            <Rectangle x:Name="Drawer1" Width="48" Height="90" Canvas.Left="740" Canvas.Top="160" Fill="#D3ABB5" Stroke="#B07D8D" StrokeThickness="2" RadiusX="10" RadiusY="10"/>
-            <Rectangle x:Name="Drawer2" Width="48" Height="90" Canvas.Left="795" Canvas.Top="160" Fill="#D3ABB5" Stroke="#B07D8D" StrokeThickness="2" RadiusX="10" RadiusY="10"/>
-            <Rectangle x:Name="Drawer3" Width="48" Height="90" Canvas.Left="850" Canvas.Top="160" Fill="#D3ABB5" Stroke="#B07D8D" StrokeThickness="2" RadiusX="10" RadiusY="10"/>
-            <Rectangle x:Name="Drawer4" Width="48" Height="90" Canvas.Left="905" Canvas.Top="160" Fill="#D3ABB5" Stroke="#B07D8D" StrokeThickness="2" RadiusX="10" RadiusY="10"/>
+        private void ToggleDesktopButton_Click(object sender, RoutedEventArgs e)
+        {
+            _desktopEnabled = !_desktopEnabled;
 
-            <Rectangle x:Name="Rug" Width="620" Height="120" Canvas.Left="470" Canvas.Top="705" Fill="#D4A7B5" Opacity="0.7" RadiusX="32" RadiusY="32"/>
-            <Ellipse x:Name="PlantPot1" Width="58" Height="44" Canvas.Left="210" Canvas.Top="660" Fill="#B47A69"/>
-            <Ellipse x:Name="PlantLeaf1" Width="42" Height="120" Canvas.Left="205" Canvas.Top="550" Fill="#7CA376"/>
-            <Ellipse x:Name="PlantLeaf2" Width="42" Height="120" Canvas.Left="225" Canvas.Top="552" Fill="#8DB986"/>
-            <Ellipse x:Name="PlantLeaf3" Width="42" Height="120" Canvas.Left="245" Canvas.Top="560" Fill="#6F9A6E"/>
+            if (_desktopEnabled)
+            {
+                if (_desktopIntegration.TryAttachToDesktop(this))
+                {
+                    WindowStyle = WindowStyle.None;
+                    AllowsTransparency = true;
+                    Topmost = true;
+                    Width = SystemParameters.VirtualScreenWidth;
+                    Height = SystemParameters.VirtualScreenHeight;
+                    Left = 0;
+                    Top = 0;
+                    ShowInTaskbar = false;
+                    ShowActivated = false;
+                    ToggleDesktopButton.Content = "Exit Desktop Mode";
+                    StatusText.Text = "Desktop mode enabled. The app is behind the desktop icons.";
+                }
+                else
+                {
+                    _desktopEnabled = false;
+                    StatusText.Text = "Desktop mode could not attach to the shell. The normal window remains available.";
+                    MessageBox.Show(
+                        "Desktop mode could not attach to the Windows desktop shell on this PC. This is a normal fallback and the app will continue in its regular window.",
+                        "Desktop mode fallback",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
+            }
+            else
+            {
+                _desktopIntegration.DetachFromDesktop(this);
+                WindowStyle = WindowStyle.SingleBorderWindow;
+                AllowsTransparency = false;
+                Topmost = false;
+                Width = 1600;
+                Height = 900;
+                Left = (SystemParameters.WorkArea.Width - Width) / 2;
+                Top = (SystemParameters.WorkArea.Height - Height) / 2;
+                ShowInTaskbar = true;
+                ToggleDesktopButton.Content = "Enable Desktop Mode";
+                StatusText.Text = "Desktop mode disabled.";
+            }
+        }
 
-            <Ellipse x:Name="PlantPot2" Width="58" Height="44" Canvas.Left="1290" Canvas.Top="660" Fill="#B47A69"/>
-            <Ellipse x:Name="PlantLeaf4" Width="42" Height="120" Canvas.Left="1284" Canvas.Top="550" Fill="#7CA376"/>
-            <Ellipse x:Name="PlantLeaf5" Width="42" Height="120" Canvas.Left="1301" Canvas.Top="552" Fill="#8DB986"/>
-            <Ellipse x:Name="PlantLeaf6" Width="42" Height="120" Canvas.Left="1325" Canvas.Top="560" Fill="#6F9A6E"/>
+        private void OpenFoldersButton_Click(object sender, RoutedEventArgs e)
+        {
+            _folderLayoutManager.OpenCozyFolders();
+            StatusText.Text = "Opened CozyDesktopOffice folders.";
+        }
 
-            <Ellipse x:Name="MusicStation" Width="220" Height="110" Canvas.Left="1180" Canvas.Top="430" Fill="#F2CADA" Stroke="#C67D97" StrokeThickness="4"/>
-            <TextBlock x:Name="MusicText" Canvas.Left="1210" Canvas.Top="468" Text="Apple Music" FontSize="20" FontWeight="Bold" Foreground="#5D384D"/>
+        private void AddPhotoButton_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new OpenFileDialog
+            {
+                Filter = "Image files (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|All files|*.*",
+                Multiselect = true,
+                Title = "Choose photos for the bulletin board"
+            };
 
-            <Canvas x:Name="ShelfObjectsCanvas" Canvas.Left="1080" Canvas.Top="145" Width="360" Height="250"/>
-            <Canvas x:Name="DeskObjectsCanvas" Canvas.Left="412" Canvas.Top="580" Width="770" Height="180"/>
-            <Canvas x:Name="BoardObjectsCanvas" Canvas.Left="120" Canvas.Top="510" Width="430" Height="260"/>
-        </Canvas>
+            if (dialog.ShowDialog() == true)
+            {
+                foreach (var file in dialog.FileNames)
+                {
+                    SaveBoardPhoto(file);
+                }
+            }
+        }
 
-        <StackPanel x:Name="TopToolbar" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,20,22,0" Orientation="Vertical" Width="300">
-            <Border Background="#FFEFF3" CornerRadius="18" BorderBrush="#D9A5AF" BorderThickness="2" Padding="12">
-                <StackPanel>
-                    <TextBlock Text="Cozy Office Controls" FontSize="19" FontWeight="Bold" Foreground="#4D2D36" Margin="0,0,0,8"/>
-                    <ComboBox x:Name="LightingModeCombo" Width="240" SelectedIndex="0" Margin="0,0,0,8">
-                        <ComboBoxItem Content="Automatic"/>
-                        <ComboBoxItem Content="Day"/>
-                        <ComboBoxItem Content="Sunset"/>
-                        <ComboBoxItem Content="Night"/>
-                    </ComboBox>
-                    <Button x:Name="ToggleDesktopButton" Content="Enable Desktop Mode" Margin="0,0,0,8" Click="ToggleDesktopButton_Click"/>
-                    <Button x:Name="OpenFoldersButton" Content="Open Cozy Folders" Margin="0,0,0,8" Click="OpenFoldersButton_Click"/>
-                    <Button x:Name="AddPhotoButton" Content="Add Bulletin Photo" Margin="0,0,0,8" Click="AddPhotoButton_Click"/>
-                    <Button x:Name="ExitButton" Content="Exit" Background="#C77E7E" Foreground="White" Click="ExitButton_Click"/>
-                </StackPanel>
-            </Border>
-        </StackPanel>
+        private void ExitButton_Click(object sender, RoutedEventArgs e)
+        {
+            Close();
+        }
 
-        <TextBlock x:Name="StatusText" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="20,0,0,20" FontSize="16" Foreground="#3D2730" Background="#FDEFF4" Padding="10,6,10,6" Text="Ready"/>
-    </Grid>
-</Window>
+        private void MainWindow_DragEnter(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                e.Effects = DragDropEffects.Copy;
+            }
+        }
+
+        private void MainWindow_Drop(object sender, DragEventArgs e)
+        {
+            if (!e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                return;
+            }
+
+            var files = (string[])e.Data.GetData(DataFormats.FileDrop)!;
+            foreach (var file in files)
+            {
+                HandleSafeCopy(file, FolderLayoutManager.DeskFolderName, "Desk");
+            }
+        }
+
+        private void BookshelfDrop(object sender, DragEventArgs e)
+        {
+            if (!e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                return;
+            }
+
+            var files = (string[])e.Data.GetData(DataFormats.FileDrop)!;
+            foreach (var file in files)
+            {
+                HandleSafeCopy(file, FolderLayoutManager.BookshelfFolderName, "Bookshelf");
+            }
+        }
+
+        private void BulletinBoardDrop(object sender, DragEventArgs e)
+        {
+            if (!e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                return;
+            }
+
+            var files = (string[])e.Data.GetData(DataFormats.FileDrop)!;
+            foreach (var file in files)
+            {
+                SaveBoardPhoto(file);
+            }
+        }
+
+        private void DrawerDrop(object sender, DragEventArgs e)
+        {
+            if (!e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                return;
+            }
+
+            var files = (string[])e.Data.GetData(DataFormats.FileDrop)!;
+            foreach (var file in files)
+            {
+                HandleSafeCopy(file, FolderLayoutManager.DrawersFolderName, "Drawers");
+            }
+        }
+
+        private void LoadSettings()
+        {
+            var prefs = _folderLayoutManager.LoadPreferences();
+            if (prefs == null)
+            {
+                return;
+            }
+
+            LightingModeCombo.SelectedIndex = prefs.LightingMode switch
+            {
+                "Day" => 1,
+                "Sunset" => 2,
+                "Night" => 3,
+                _ => 0
+            };
+        }
+
+        private void LightingModeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (LightingModeCombo.SelectedIndex < 0)
+            {
+                return;
+            }
+
+            var text = ((ComboBoxItem)LightingModeCombo.SelectedItem)?.Content?.ToString() ?? "Automatic";
+            var mode = text switch
+            {
+                "Day" => "Day",
+                "Sunset" => "Sunset",
+                "Night" => "Night",
+                _ => "Automatic"
+            };
+
+            var prefs = _folderLayoutManager.LoadPreferences() ?? new RoomPreferences();
+            prefs.LightingMode = mode;
+            _folderLayoutManager.SavePreferences(prefs);
+            RefreshLighting();
+        }
+
+        private void RefreshLighting()
+        {
+            var prefs = _folderLayoutManager.LoadPreferences() ?? new RoomPreferences();
+            var effectiveMode = prefs.LightingMode;
+            if (effectiveMode == "Automatic")
+            {
+                var hour = DateTime.Now.Hour;
+                if (hour >= 18 || hour < 7)
+                {
+                    effectiveMode = "Night";
+                }
+                else if (hour >= 16 && hour < 18)
+                {
+                    effectiveMode = "Sunset";
+                }
+                else
+                {
+                    effectiveMode = "Day";
+                }
+            }
+
+            var wallColor = effectiveMode switch
+            {
+                "Night" => Color.FromRgb(0x22, 0x27, 0x36),
+                "Sunset" => Color.FromRgb(0xF8, 0xD8, 0xD6),
+                _ => Color.FromRgb(0xF7, 0xE8, 0xF1)
+            };
+
+            var windowSky = effectiveMode switch
+            {
+                "Night" => Color.FromRgb(0x1A, 0x2E, 0x59),
+                "Sunset" => Color.FromRgb(0xF4, 0xB6, 0x7C),
+                _ => Color.FromRgb(0xB7, 0xD8, 0xF2)
+            };
+
+            var floorColor = effectiveMode switch
+            {
+                "Night" => Color.FromRgb(0x4C, 0x38, 0x2D),
+                "Sunset" => Color.FromRgb(0xD9, 0xA3, 0x77),
+                _ => Color.FromRgb(0xD6, 0xB1, 0x9B)
+            };
+
+            var deskColor = effectiveMode switch
+            {
+                "Night" => Color.FromRgb(0x87, 0x5C, 0x47),
+                "Sunset" => Color.FromRgb(0xB9, 0x7E, 0x5C),
+                _ => Color.FromRgb(0xB9, 0x84, 0x60)
+            };
+
+            var lampColor = effectiveMode switch
+            {
+                "Night" => Color.FromRgb(0xFF, 0xE2, 0x8B),
+                _ => Color.FromRgb(0xF2, 0xC9, 0xB9)
+            };
+
+            WallPanel.Background = new SolidColorBrush(wallColor);
+            FloorPanel.Background = new SolidColorBrush(floorColor);
+            WindowGlass.Fill = new SolidColorBrush(windowSky);
+            DeskTop.Fill = new SolidColorBrush(deskColor);
+            DeskFront.Fill = new SolidColorBrush(Color.FromRgb(0x8E, 0x5E, 0x49));
+            LampShade.Fill = new SolidColorBrush(lampColor);
+            MusicStation.Fill = effectiveMode == "Night" ? new SolidColorBrush(Color.FromRgb(0xF8, 0xD8, 0xEB)) : new SolidColorBrush(Color.FromRgb(0xF1, 0xC7, 0xDA));
+            StatusText.Text = $"Lighting: {effectiveMode}";
+        }
+
+        private void RenderBooks()
+        {
+            ShelfObjectsCanvas.Children.Clear();
+            var files = _folderLayoutManager.ReadCopiedFiles(FolderLayoutManager.BookshelfFolderName);
+            double x = 0;
+            double y = 0;
+
+            foreach (var file in files)
+            {
+                var tile = new Border
+                {
+                    Width = 72,
+                    Height = 110,
+                    Background = new SolidColorBrush(Color.FromRgb(0xF8, 0xD9, 0xDA)),
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(0xB6, 0x7D, 0x85)),
+                    BorderThickness = new Thickness(2),
+                    CornerRadius = new CornerRadius(4),
+                    Tag = file.Path
+                };
+
+                var title = Path.GetFileNameWithoutExtension(file.FileName);
+                var label = new TextBlock
+                {
+                    Text = title.Length > 12 ? title.Substring(0, 11) + "..." : title,
+                    Foreground = new SolidColorBrush(Colors.DarkSlateGray),
+                    FontWeight = FontWeights.Bold,
+                    FontSize = 11,
+                    TextWrapping = TextWrapping.Wrap,
+                    Width = 60,
+                    TextAlignment = TextAlignment.Center
+                };
+
+                tile.Child = label;
+                Canvas.SetLeft(tile, x);
+                Canvas.SetTop(tile, y);
+                tile.MouseLeftButtonDown += Book_Click;
+                ShelfObjectsCanvas.Children.Add(tile);
+
+                x += 84;
+                if (x > 280)
+                {
+                    x = 0;
+                    y += 95;
+                }
+            }
+        }
+
+        private void RenderDeskItems()
+        {
+            DeskObjectsCanvas.Children.Clear();
+            var files = _folderLayoutManager.ReadCopiedFiles(FolderLayoutManager.DeskFolderName);
+            double x = 0;
+            double y = 0;
+
+            foreach (var file in files)
+            {
+                var item = new Border
+                {
+                    Width = 120,
+                    Height = 62,
+                    Background = new SolidColorBrush(Color.FromRgb(0xF9, 0xF0, 0xF2)),
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(0xC9, 0x88, 0x96)),
+                    BorderThickness = new Thickness(2),
+                    CornerRadius = new CornerRadius(8),
+                    Tag = file.Path
+                };
+
+                var text = new TextBlock
+                {
+                    Text = GetShortLabel(file.FileName),
+                    Foreground = new SolidColorBrush(Colors.Black),
+                    FontSize = 11,
+                    TextWrapping = TextWrapping.Wrap,
+                    Width = 100,
+                    Margin = new Thickness(8),
+                    TextAlignment = TextAlignment.Center
+                };
+
+                item.Child = text;
+                Canvas.SetLeft(item, x);
+                Canvas.SetTop(item, y);
+                item.MouseLeftButtonDown += DeskItem_Click;
+                DeskObjectsCanvas.Children.Add(item);
+
+                x += 140;
+                if (x > 650)
+                {
+                    x = 0;
+                    y += 80;
+                }
+            }
+        }
+
+        private void RenderBoardItems()
+        {
+            BoardObjectsCanvas.Children.Clear();
+            var files = _folderLayoutManager.ReadCopiedFiles(FolderLayoutManager.BulletinBoardFolderName);
+            int count = 0;
+
+            foreach (var file in files)
+            {
+                var lower = file.Path.ToLowerInvariant();
+                if (!lower.EndsWith(".jpg") && !lower.EndsWith(".jpeg") && !lower.EndsWith(".png") && !lower.EndsWith(".bmp") && !lower.EndsWith(".gif"))
+                {
+                    continue;
+                }
+
+                var image = new Image
+                {
+                    Source = new BitmapImage(new Uri(file.Path, UriKind.Absolute)),
+                    Width = 120,
+                    Height = 120,
+                    Stretch = Stretch.UniformToFill,
+                    Margin = new Thickness(10),
+                    Tag = file.Path
+                };
+
+                BoardObjectsCanvas.Children.Add(image);
+                Canvas.SetLeft(image, (count % 3) * 130 + 10);
+                Canvas.SetTop(image, (count / 3) * 130 + 10);
+                count++;
+            }
+        }
+
+        private void Book_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is Border border && border.Tag is string path)
+            {
+                OpenPath(path, "Opened file from the bookshelf.");
+            }
+        }
+
+        private void DeskItem_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is Border border && border.Tag is string path)
+            {
+                OpenPath(path, "Opened desk file.");
+            }
+        }
+
+        private void OpenPath(string path, string successText)
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = path,
+                    UseShellExecute = true
+                });
+                StatusText.Text = successText;
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = "Could not open the file: " + ex.Message;
+            }
+        }
+
+        private void HandleSafeCopy(string sourcePath, string folderName, string label)
+        {
+            if (!File.Exists(sourcePath))
+            {
+                StatusText.Text = "The dropped file no longer exists.";
+                return;
+            }
+
+            try
+            {
+                var destination = _folderLayoutManager.CopySafely(sourcePath, folderName);
+                StatusText.Text = $"Copied to {label}: {destination}";
+
+                if (folderName == FolderLayoutManager.BookshelfFolderName)
+                {
+                    RenderBooks();
+                }
+                else if (folderName == FolderLayoutManager.DeskFolderName)
+                {
+                    RenderDeskItems();
+                }
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = "Could not copy the file: " + ex.Message;
+            }
+        }
+
+        private void SaveBoardPhoto(string sourcePath)
+        {
+            if (!File.Exists(sourcePath))
+            {
+                StatusText.Text = "The selected photo does not exist.";
+                return;
+            }
+
+            try
+            {
+                var destination = _folderLayoutManager.CopySafely(sourcePath, FolderLayoutManager.BulletinBoardFolderName);
+                RenderBoardItems();
+                StatusText.Text = "Saved bulletin board photo: " + destination;
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = "Could not save the photo: " + ex.Message;
+            }
+        }
+
+        private static string GetShortLabel(string fileName)
+        {
+            var name = Path.GetFileNameWithoutExtension(fileName);
+            return name.Length > 18 ? name.Substring(0, 15) + "..." : name;
+        }
+    }
+
+    public class StoredFileItem
+    {
+        public string FileName { get; set; } = string.Empty;
+        public string Path { get; set; } = string.Empty;
+    }
+
+    public class StoredPhoto
+    {
+        public string Path { get; set; } = string.Empty;
+    }
+
+    public class RoomPreferences
+    {
+        public string LightingMode { get; set; } = "Automatic";
+        public string PetChoice { get; set; } = "None";
+        public string DeskColor { get; set; } = "Blush";
+    }
+}
