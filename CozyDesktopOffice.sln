@@ -1,0 +1,30 @@
+# Visual Studio temporary files, build results, and
+# user-specific files
+
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Build results
+[Dd]ebug/
+[Rr]elease/
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio cache
+.vs/
+
+# Rider
+.idea/
+
+# NuGet packages
+packages/
+*.nupkg
+
+# Publish output
+publish/
+
+# OS files
+Thumbs.db
+Desktop.ini

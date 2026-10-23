@@ -1,0 +1,17 @@
+using System.Windows;
+
+namespace CozyDesktopOffice
+{
+    public partial class App : Application
+    {
+        protected override void OnStartup(StartupEventArgs e)
+        {
+            base.OnStartup(e);
+
+            if (Environment.OSVersion.Version.Major < 10)
+            {
+                MessageBox.Show("This app targets Windows 10 and Windows 11. Please run it on a supported Windows version.", "Unsupported OS", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+    }
+}
